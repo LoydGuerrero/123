@@ -1,47 +1,87 @@
 <?php
+//Start session to manage user session data
 session_start();
+
+//To connect with the database connection file
 include "db_conn.php";
 
-if (isset($_POST['uname']) && isset($_POST['password'])) {
+// Check if form fields are set and not empty
+if (isset($_POST['username']) && isset($_POST['password'])) {
+
+    // Function to filter the input data
     function validate($data) {
         $data = trim($data);
         $data = stripslashes($data);
         $data = htmlspecialchars($data);
         return $data;
     }
-    $uname = validate($_POST['uname']);
-    $pass = validate($_POST['password']);
 
-    if (empty($uname)) {
-        header("Location:login.php?error=User Name is required");
+    // Validate and filter the username and password inputs
+    $username = validate($_POST['username']);
+    $password = validate($_POST['password']);
+
+    // Check if username is empty
+    if (empty($username)) {
+        header("Location: loginform.php?error=User Name is required");
         exit();
-    }else if(empty($pass)){
-        header("Location:login.php?error=Password is required");
+    }
+
+    // Check if password is empty
+    else if (empty($password)) {
+        header("Location: loginform.php?error=password is required");
         exit();
-    }else{
-        $sql = "SELECT * FROM user WHERE username='$uname' AND password='$pass'";
-        $result = mysqli_query($conn, $sql);
+    }
+
+    // Proceed with authentication
+    else {
+        // Check if username and password match in database
+        $sql = "SELECT * FROM user WHERE (username=? OR email=?)";
+        $stmt = mysqli_prepare($conn, $sql);
+        if ($stmt === false) {
+            die("Error: " . mysqli_error($conn));
+        }
+        mysqli_stmt_bind_param($stmt, "ss", $username, $username);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+
+        // Check if there is a matching user record
         if (mysqli_num_rows($result) === 1) {
             $row = mysqli_fetch_assoc($result);
-            if ($row['username'] === $uname && $row['password'] === $pass) {
-                echo "Logged in!";
-                $_SESSION['username'] = $row['username'];
-                $_SESSION['name'] = $row['name'];
-                $_SESSION['id'] = $row['id'];
-                header("Location: home.php");
-                exit();
-            }else{
-                header("Location: login.php?error=Incorect User name or password");
+
+            // Check if the email is verified
+            if ($row['verified'] == 0) {
+                // Redirect user to a verification page or display a message
+                header("Location: loginform.php?error=Please verify your email first. Check your email for the verification link");
                 exit();
             }
-        }else{
-            header("Location: login.php?error=Incorect User name or password");
+
+            // Check if username and password match
+            if ($row['username'] === $username && password_verify($password, $row['password'])) {
+                echo "Logged in!";
+                // Set session variables for user
+                $_SESSION['user_id'] = $row['id'];
+                $_SESSION['username'] = $username;
+                // Redirect user to home page
+                header("Location: home.php");
+                exit();
+            } else {
+                // Send the user if the credentials are incorrect
+                header("Location: loginform.php?error=Incorrect User name or password");
+                exit();
+            }
+        }
+
+        // Send the user if the credentials are incorrect
+        else {
+            header("Location: loginform.php?error=Incorrect User name or password");
             exit();
         }
-    }    
+    }
+}
 
-}else{
-    header("Location: index.php");
+// Send the user to login form if the data is not set
+else {
+    header("Location: loginform.php");
     exit();
 }
 ?>
